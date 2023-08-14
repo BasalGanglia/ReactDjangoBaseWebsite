@@ -19,129 +19,162 @@ from datetime import datetime, timezone
 
 User = get_user_model()
 
+
 class MyTokenObtainPairSerializer(TokenObtainPairSerializer):
     @classmethod
     def get_token(cls, user):
         token = super().get_token(user)
- 
-        token['name'] = user.name
- 
+
+        token["name"] = user.name
+
         return token
- 
+
+
 class MyTokenObtainPairView(TokenObtainPairView):
     serializer_class = MyTokenObtainPairSerializer
 
-@api_view(['POST'])
+
+@api_view(["POST"])
 def registerUser(request):
     verification_secret = get_random_string(length=32)
 
-    if 'password' in request.data and 'email' in request.data and 'name' in request.data:
+    if (
+        "password" in request.data
+        and "email" in request.data
+        and "name" in request.data
+    ):
         try:
             user = User.objects.create_user(
-                email=request.data['email'],
-                name=request.data['name'],
-                password=request.data['password'],
+                email=request.data["email"],
+                name=request.data["name"],
+                password=request.data["password"],
                 is_active=False,
                 is_staff=False,
                 is_superuser=False,
                 sent_verification_email=False,
                 verified_email=False,
                 verification_email_secret=verification_secret,
-                )
+            )
         except IntegrityError:
-            return Response({'message': 'user already exists'},status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"message": "user already exists"}, status=status.HTTP_400_BAD_REQUEST
+            )
         except:
-            return Response({'message': 'user could not be registered'},status=status.HTTP_400_BAD_REQUEST)
+            return Response(
+                {"message": "user could not be registered"},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
 
         try:
-            send_mail(
-                f'Verify your user account for {settings.WEB_SITE_NAME}',
-                f'To verify your user account for {settings.WEB_SITE_NAME}, please go to {settings.VERIFICATION_URL}{verification_secret}',
-                settings.SENDER_EMAIL,
-                [request.data['email']],
-                fail_silently=False,
-                html_message=f'Please <a href="{settings.VERIFICATION_URL}{verification_secret}">click this link</a> to verify your user account for {settings.WEB_SITE_NAME}.',
- 
-            )
-            user.sent_verification_email=True
+            # send_mail(
+            #     f'Verify your user account for {settings.WEB_SITE_NAME}',
+            #     f'To verify your user account for {settings.WEB_SITE_NAME}, please go to {settings.VERIFICATION_URL}{verification_secret}',
+            #     settings.SENDER_EMAIL,
+            #     [request.data['email']],
+            #     fail_silently=False,
+            #     html_message=f'Please <a href="{settings.VERIFICATION_URL}{verification_secret}">click this link</a> to verify your user account for {settings.WEB_SITE_NAME}.',
+
+            # )
+            ## Ilkka add
+            user.verified_email = True
+            user.is_active = True
+            user.date_email_verified = datetime.now(timezone.utc)
+            ## ilka end
+            user.sent_verification_email = True
             user.save()
         except:
-            print("send_mail exception:",sys.exc_info())
-            return Response({'message': 'Verification email could not be sent.'},status=status.HTTP_400_BAD_REQUEST)
-        return Response({'message': 'user registered'},status=status.HTTP_200_OK)
-    return Response({'message': 'user information missing'},status=status.HTTP_400_BAD_REQUEST)
- 
-@api_view(['POST'])
-def verifyUser(request):
-    try:
-        verification_secret=request.data['verification_secret']
-        user = User.objects.get(verification_email_secret=verification_secret)
-        user.verified_email=True
-        user.is_active=True
-        user.date_email_verified=datetime.now(timezone.utc)
-        user.save()
-        return Response({'message': 'user verified'},status=status.HTTP_200_OK)
-    except:
-        return Response({'message': 'unable to verify user'},status=status.HTTP_400_BAD_REQUEST)
+            print("send_mail exception:", sys.exc_info())
+            return Response(
+                {"message": "Verification email could not be sent."},
+                status=status.HTTP_400_BAD_REQUEST,
+            )
+        return Response({"message": "user registered"}, status=status.HTTP_200_OK)
+    return Response(
+        {"message": "user information missing"}, status=status.HTTP_400_BAD_REQUEST
+    )
 
-@api_view(['GET'])
+
+@api_view(["POST"])
+def verifyUser(request):
+    return Response({"message": "user verified"}, status=status.HTTP_200_OK)
+
+    # try:
+    #     verification_secret = request.data["verification_secret"]
+    #     user = User.objects.get(verification_email_secret=verification_secret)
+    #     user.verified_email = True
+    #     user.is_active = True
+    #     user.date_email_verified = datetime.now(timezone.utc)
+    #     user.save()
+    #     return Response({"message": "user verified"}, status=status.HTTP_200_OK)
+    # except:
+    #     return Response(
+    #         {"message": "unable to verify user"}, status=status.HTTP_400_BAD_REQUEST
+    #     )
+
+
+@api_view(["GET"])
 @permission_classes([IsAuthenticated])
 def userProfile(request):
     user = request.user
     serializer = UserSerializer(user, many=False)
     return Response(serializer.data)
 
-@api_view(['PUT'])
+
+@api_view(["PUT"])
 @permission_classes([IsAuthenticated])
 def updateUserProfile(request):
-    update_flag=False
+    update_flag = False
     user = User.objects.get(email=request.user)
     if "name" in request.data:
-        user.name=request.data['name']
-        update_flag=True
+        user.name = request.data["name"]
+        update_flag = True
     if "password" in request.data:
-        user.password=make_password(request.data['password'])
-        update_flag=True
+        user.password = make_password(request.data["password"])
+        update_flag = True
     if update_flag:
         user.save()
     access_token = RefreshToken.for_user(user)
-    access_token['name'] = user.name
-    return Response({'access': str(access_token.access_token), 'refresh': str(access_token)},status=status.HTTP_200_OK)
+    access_token["name"] = user.name
+    return Response(
+        {"access": str(access_token.access_token), "refresh": str(access_token)},
+        status=status.HTTP_200_OK,
+    )
 
-@api_view(['POST'])
+
+@api_view(["POST"])
 def forgotPassword(request):
     if "email" in request.data:
         reset_secret = get_random_string(length=32)
         try:
-            user = User.objects.get(email=request.data['email'])
-            user.reset_password_secret=reset_secret
-            user.save()        
+            user = User.objects.get(email=request.data["email"])
+            user.reset_password_secret = reset_secret
+            user.save()
         except:
             return Response(status=status.HTTP_200_OK)
         try:
             send_mail(
-                f'Password reset for your account on {settings.WEB_SITE_NAME}',
-                f'To reset your password for {settings.WEB_SITE_NAME}, please go to {settings.RESET_PASSWORD_URL}{reset_secret}',
+                f"Password reset for your account on {settings.WEB_SITE_NAME}",
+                f"To reset your password for {settings.WEB_SITE_NAME}, please go to {settings.RESET_PASSWORD_URL}{reset_secret}",
                 settings.SENDER_EMAIL,
-                [request.data['email']],
+                [request.data["email"]],
                 fail_silently=False,
-                html_message=f'Please <a href="{settings.RESET_PASSWORD_URL}{reset_secret}">click this link</a> to reset your password for {settings.WEB_SITE_NAME}.'
-
+                html_message=f'Please <a href="{settings.RESET_PASSWORD_URL}{reset_secret}">click this link</a> to reset your password for {settings.WEB_SITE_NAME}.',
             )
         except:
-            pass        
-        return Response(status=status.HTTP_200_OK)     
+            pass
+        return Response(status=status.HTTP_200_OK)
     return Response(status=status.HTTP_400_BAD_REQUEST)
 
-@api_view(['POST'])
+
+@api_view(["POST"])
 def resetPassword(request):
     if "password" not in request.data:
         return Response(status=status.HTTP_400_BAD_REQUEST)
     try:
-        user = User.objects.get(reset_password_secret=request.data['reset_secret'])
-        user.password=make_password(request.data['password'])
-        user.reset_password_secret=None
-        user.save()        
+        user = User.objects.get(reset_password_secret=request.data["reset_secret"])
+        user.password = make_password(request.data["password"])
+        user.reset_password_secret = None
+        user.save()
     except:
         return Response(status=status.HTTP_400_BAD_REQUEST)
 

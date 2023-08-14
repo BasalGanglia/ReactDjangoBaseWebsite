@@ -18,12 +18,14 @@ from django.urls import path, include
 import os
 
 urlpatterns = [
-    path('api/users/', include('api.urls.users_urls')),
+    path("api/users/", include("api.urls.users_urls")),
 ]
 
-if os.getenv('DJANGO_ADMIN') is not None and os.getenv('DJANGO_ADMIN') == 'True':
+if os.getenv("DJANGO_ADMIN") is not None and os.getenv("DJANGO_ADMIN") == "True":
     print("Django admin site enabled")
-    urlpatterns.insert(0,path('admin/', admin.site.urls),)
+    urlpatterns.insert(
+        0,
+        path("admin/", admin.site.urls),
+    )
 else:
-        print("Django admin site disabled")
-
+    print("Django admin site disabled")
